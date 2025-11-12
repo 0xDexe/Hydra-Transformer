@@ -9,6 +9,7 @@ from pathlib import Path
 import time
 import json
 from datetime import datetime
+from torch.cuda.amp import autocast, GradScaler
 
 from src.model.hybrid_model import HybridSSMTransformer
 from src.data.dataset import get_dataloaders
@@ -201,13 +202,14 @@ class Trainer:
         # Global step counter
         self.global_step = 0
         
-    def train_epoch(self, epoch):
+    def train_epoch(self, epoch,scaler = None):
         """Train for one epoch"""
         self.model.train()
         total_loss = 0
         epoch_start_time = time.time()
         
         pbar = tqdm(self.train_loader, desc=f"Epoch {epoch}")
+        
         for batch_idx, batch in enumerate(pbar):
             iter_start_time = time.time()
             
@@ -215,11 +217,16 @@ class Trainer:
             labels = batch['labels'].to(self.device)
             
             # Forward pass
-            loss, logits = self.model(input_ids, labels=labels)
+            with torch.autocast(device_type=self.device,\
+                                dtype=torch.float16):
+            
+                loss, logits = self.model(input_ids, labels=labels)
             
             # Backward pass
             self.optimizer.zero_grad()
-            loss.backward()
+
+            # loss.backward()
+            scaler.scale(loss).backward()
             
             # Gradient clipping
             torch.nn.utils.clip_grad_norm_(
@@ -227,7 +234,9 @@ class Trainer:
                 self.config.grad_clip
             )
             
-            self.optimizer.step()
+            # self.optimizer.step()
+            scaler.step(self.optimizer)
+            scaler.update()
             self.scheduler.step()
             
             # Update metrics
@@ -352,14 +361,14 @@ class Trainer:
         print(f"Logging to: {self.loss_logger.log_file}")
         print(f"Checkpoint interval: {self.checkpoint_interval_seconds / 3600:.1f} hours")
         print(f"{'='*60}\n")
-        
+        scaler = GradScaler()
         for epoch in range(self.config.num_epochs):
             print(f"\n{'='*60}")
             print(f"Epoch {epoch + 1}/{self.config.num_epochs}")
             print(f"{'='*60}")
             
             # Train
-            train_loss, epoch_time = self.train_epoch(epoch)
+            train_loss, epoch_time = self.train_epoch(epoch,scaler)
             print(f"Train loss: {train_loss:.4f} (time: {epoch_time:.1f}s)")
             
             # Validate
