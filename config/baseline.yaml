@@ -1,0 +1,34 @@
+# Model config
+model:
+  d_model: 768
+  n_layers: 12
+  layer_pattern: 'alternating'
+  n_heads: 12
+  d_state: 16
+  d_conv: 4
+  expand: 2
+
+# Data config
+data:
+  dataset_name: 'wikitext'
+  dataset_config: 'wikitext-103-v1'
+  tokenizer_name: 'gpt2'
+  max_length: 1024
+  batch_size: 8
+  num_workers: 4
+
+# Training config
+training:
+  num_epochs: 20
+  learning_rate: 3e-4
+  weight_decay: 0.01
+  grad_clip: 1.0
+  warmup_steps: 1000
+
+# Logging
+logging:
+  use_wandb: true
+  project_name: 'hybrid-ssm-transformer'
+  run_name: 'baseline-hybrid-v1'
+  output_dir: 'outputs/baseline-v1'
+  log_interval: 100
