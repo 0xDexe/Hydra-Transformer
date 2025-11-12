@@ -217,7 +217,7 @@ class Trainer:
             labels = batch['labels'].to(self.device)
             
             # Forward pass
-            with torch.autocast(device_type=self.device,\
+            with autocast(device_type=self.device,\
                                 dtype=torch.float16):
             
                 loss, logits = self.model(input_ids, labels=labels)
