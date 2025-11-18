@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR
+from torch.amp.autocast_mode import autocast
+from torch.amp.grad_scaler import GradScaler
 import wandb
 from tqdm import tqdm
 import os
@@ -120,6 +122,23 @@ class Trainer:
         self.config = config
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
+        # Determine dtype for training
+        if config.use_mixed_precision and torch.cuda.is_available():
+            # Use bf16 if available, otherwise fp16
+            if torch.cuda.is_bf16_supported():
+                self.dtype = torch.bfloat16
+                print("Using mixed precision training with bfloat16")
+            else:
+                self.dtype = torch.float16
+                print("Using mixed precision training with float16")
+        else:
+            self.dtype = torch.float32
+            print("Using float32 training")
+        
+        # Setup gradient scaler for mixed precision
+        self.use_amp = config.use_mixed_precision and torch.cuda.is_available()
+        self.scaler = GradScaler('cuda', enabled=self.use_amp)
+        
         # Setup wandb
         if config.use_wandb:
             wandb.init(
@@ -147,6 +166,7 @@ class Trainer:
         print(f"Total parameters: {self.model.get_num_params() / 1e6:.2f}M")
         print(f"Non-embedding parameters: {self.model.get_num_params(non_embedding=True) / 1e6:.2f}M")
         print(f"Pattern: {config.layer_pattern}")
+        print(f"Training dtype: {self.dtype}")
         print("\nLayer structure:")
         for layer_info in self.model.get_layer_info():
             print(f"  {layer_info}")
@@ -209,25 +229,28 @@ class Trainer:
         
         pbar = tqdm(self.train_loader, desc=f"Epoch {epoch}")
         for batch_idx, batch in enumerate(pbar):
-            iter_start_time = time.time()
-            
             input_ids = batch['input_ids'].to(self.device)
             labels = batch['labels'].to(self.device)
             
-            # Forward pass
-            loss, logits = self.model(input_ids, labels=labels)
+            # Forward pass with autocast for mixed precision
+            with autocast('cuda', enabled=self.use_amp, dtype=self.dtype):
+                loss, logits = self.model(input_ids, labels=labels)
             
-            # Backward pass
+            # Backward pass with gradient scaling
             self.optimizer.zero_grad()
-            loss.backward()
+            self.scaler.scale(loss).backward()
             
-            # Gradient clipping
+            # Gradient clipping (unscale first for accurate clipping)
+            self.scaler.unscale_(self.optimizer)
             torch.nn.utils.clip_grad_norm_(
                 self.model.parameters(),
                 self.config.grad_clip
             )
             
-            self.optimizer.step()
+            # Optimizer step with scaler
+            self.scaler.step(self.optimizer)
+            self.scaler.update()
+            
             self.scheduler.step()
             
             # Update metrics
@@ -292,7 +315,10 @@ class Trainer:
             input_ids = batch['input_ids'].to(self.device)
             labels = batch['labels'].to(self.device)
             
-            loss, logits = self.model(input_ids, labels=labels)
+            # Use autocast for validation too
+            with autocast('cuda', enabled=self.use_amp, dtype=self.dtype):
+                loss, logits = self.model(input_ids, labels=labels)
+            
             total_loss += loss.item()
         
         avg_loss = total_loss / len(self.val_loader)
@@ -316,10 +342,12 @@ class Trainer:
             'model_state_dict': self.model.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
             'scheduler_state_dict': self.scheduler.state_dict(),
+            'scaler_state_dict': self.scaler.state_dict() if self.use_amp else None,
             'val_loss': val_loss,
             'best_val_loss': self.best_val_loss,
             'config': self.config,
             'training_time': time.time() - self.training_start_time,
+            'dtype': str(self.dtype),
         }
         
         # Save latest
@@ -330,7 +358,7 @@ class Trainer:
         if is_best:
             path = self.output_dir / 'checkpoint_best.pt'
             torch.save(checkpoint, path)
-            print(f"💾 Saved best model with val_loss: {val_loss:.4f}")
+            print(f"Saved best model with val_loss: {val_loss:.4f}")
             self.loss_logger.log_checkpoint(epoch, 'best', path)
         
         # Time-based checkpoint
@@ -339,7 +367,7 @@ class Trainer:
             hours = int((time.time() - self.training_start_time) / 3600)
             path = self.output_dir / f'checkpoint_time_{hours}h_{timestamp}.pt'
             torch.save(checkpoint, path)
-            print(f"💾 Saved time-based checkpoint ({hours}h): {path.name}")
+            print(f" Saved time-based checkpoint ({hours}h): {path.name}")
             self.loss_logger.log_checkpoint(epoch, f'time_based_{hours}h', path)
     
     def train(self):
@@ -348,6 +376,8 @@ class Trainer:
         print("STARTING TRAINING")
         print(f"{'='*60}")
         print(f"Device: {self.device}")
+        print(f"Training dtype: {self.dtype}")
+        print(f"Mixed precision: {self.use_amp}")
         print(f"Output directory: {self.output_dir}")
         print(f"Logging to: {self.loss_logger.log_file}")
         print(f"Checkpoint interval: {self.checkpoint_interval_seconds / 3600:.1f} hours")
@@ -425,6 +455,7 @@ class TrainConfig:
         self.learning_rate = 3e-4
         self.weight_decay = 0.01
         self.grad_clip = 1.0
+        self.use_mixed_precision = True  # Enable mixed precision training
         
         # Logging
         self.use_wandb = True

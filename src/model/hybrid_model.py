@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
-from src.model.attention_block import AttentionBlock
-from src.model.ssm_block import SSMBlock
-from src.model.ffn_block import FFNBlock
+from model.blocks.attention_block import AttentionBlock
+from model.blocks.ssm_block import SSMBlock
+from model.blocks.ffn_block import FFNBlock
 
 
 class HybridSSMTransformer(nn.Module):
