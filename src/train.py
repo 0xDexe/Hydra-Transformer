@@ -452,7 +452,7 @@ class TrainConfig:
         
         # Training
         self.num_epochs = 10
-        self.learning_rate = 3e-4
+        self.learning_rate = float(3e-4)
         self.weight_decay = 0.01
         self.grad_clip = 1.0
         self.use_mixed_precision = True  # Enable mixed precision training
