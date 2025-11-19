@@ -12,7 +12,7 @@ import time
 import json
 from datetime import datetime
 
-from src.model.hybrid_model import HybridSSMTransformer
+from src.model.routed_model import RoutedHybridSSMTransformer
 from src.data.dataset import get_dataloaders
 
 
@@ -148,16 +148,18 @@ class Trainer:
             )
         
         # Create model
-        self.model = HybridSSMTransformer(
+        self.model = RoutedHybridSSMTransformer(
             vocab_size=config.vocab_size,
             d_model=config.d_model,
             n_layers=config.n_layers,
-            pattern=config.layer_pattern,
             n_heads=config.n_heads,
             d_state=config.d_state,
             d_conv=config.d_conv,
             expand=config.expand,
             dropout=config.dropout,
+            max_seq_len=config.max_length,
+            routing_topk_ratio=config.routing_topk_ratio,
+            router_hidden_dim=config.router_hidden_dim,
         ).to(self.device)
         
         print(f"\n{'='*60}")
@@ -434,13 +436,15 @@ class TrainConfig:
         # Model architecture
         self.d_model = 512
         self.n_layers = 6
-        self.layer_pattern = 'alternating'  # 'alternating', 'attention_first', 'ssm_first'
         self.n_heads = 8
         self.d_state = 16
         self.d_conv = 4
         self.expand = 2
         self.dropout = 0.1
         self.vocab_size = 50257  # Will be updated from tokenizer
+        self.use_routing = True             
+        self.routing_topk_ratio = 0.20       # 20% tokens to attention
+        self.router_hidden_dim = self.d_model
         
         # Data
         self.dataset_name = 'wikitext'
@@ -459,9 +463,9 @@ class TrainConfig:
         
         # Logging
         self.use_wandb = True
-        self.project_name = 'hybrid-ssm-transformer'
-        self.run_name = 'baseline-hybrid'
-        self.output_dir = 'outputs/baseline'
+        self.project_name = 'routed-hybrid-ssm-transformer'
+        self.run_name = 'routed-hybrid-baseline'
+        self.output_dir = 'outputs/routed-hybrid'
         self.log_interval = 10  # Log every N steps
 
 
