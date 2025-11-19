@@ -20,7 +20,7 @@ data:
 # Training config
 training:
   num_epochs: 20
-  learning_rate: 3e-4
+  learning_rate: 0.0003
   weight_decay: 0.01
   grad_clip: 1.0
   warmup_steps: 1000
