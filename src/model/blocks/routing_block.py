@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
 
-from src.model.attention_core import AttentionCore
-from src.model.ssm_core import SSMCore
-from src.model.token_router import TokenRouter
+from src.model.blocks.attention_core import AttentionCore
+from src.model.blocks.ssm_core import SSMCore
+from src.model.blocks.token_router import TokenRouter
 
 class RoutedHybridBlock(nn.Module):
     """
