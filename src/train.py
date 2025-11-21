@@ -167,7 +167,8 @@ class Trainer:
         print(f"{'='*60}")
         print(f"Total parameters: {self.model.get_num_params() / 1e6:.2f}M")
         print(f"Non-embedding parameters: {self.model.get_num_params(non_embedding=True) / 1e6:.2f}M")
-        print(f"Pattern: {config.layer_pattern}")
+        print(f"Routing: topk_ratio={config.routing_topk_ratio}, "
+            f"context_mode={self.model.context_layer.mode}")
         print(f"Training dtype: {self.dtype}")
         print("\nLayer structure:")
         for layer_info in self.model.get_layer_info():

@@ -158,12 +158,97 @@ class RoutedHybridSSMTransformer(nn.Module):
             )
             return loss, logits
 
-        return logits
-
+        return logits    
+    
     def get_num_params(self, non_embedding=False):
-        """Return the number of parameters in the model."""
+        """
+        Return the number of parameters in the model
+        
+        Args:
+            non_embedding: If True, subtract embedding + positional embedding params
+        """
         n_params = sum(p.numel() for p in self.parameters())
+        
         if non_embedding:
             n_params -= self.token_embedding.weight.numel()
             n_params -= self.pos_embedding.numel()
+
         return n_params
+
+
+    def estimate_mfu(self, fwdbwd_per_iter, dt):
+        """
+        Estimate model flops utilization (MFU) relative to A100 bfloat16 peak.
+
+        This is a very rough estimate but enough for training logs.
+        """
+        N = self.get_num_params()
+        L = self.n_layers
+        H = self.n_heads
+        Q = self.d_model // self.n_heads
+        T = 1024   # assume typical context length used in GPT MFU papers
+
+        # Standard approximation used in NanoGPT / Karpathy MFU code
+        flops_per_token = 6 * N + 12 * L * H * Q * T
+        flops_per_fwdbwd = flops_per_token * T
+        flops_per_iter = flops_per_fwdbwd * fwdbwd_per_iter
+
+        flops_achieved = flops_per_iter / dt
+        flops_theoretical = 312e12  # A100 bfloat16 peak FLOPs
+
+        return flops_achieved / flops_theoretical
+
+
+    def get_layer_info(self):
+        """
+        Return a human-readable list of layer descriptions.
+        Works for RoutedHybridBlock + FFN stack.
+        """
+        info = []
+        block_idx = 0
+
+        info.append(f"Context Layer: {self.context_layer.__class__.__name__}")
+
+        for i, layer in enumerate(self.layers):
+            if isinstance(layer, RoutedHybridBlock):
+                info.append(f"Block {block_idx}: RoutedHybridBlock "
+                            f"(topk_ratio={self.routing_topk_ratio})")
+            elif isinstance(layer, FFNBlock):
+                info.append(f"Block {block_idx}:   └─ FFNBlock")
+                block_idx += 1
+            else:
+                info.append(f"Block {block_idx}: UnknownLayer({layer.__class__.__name__})")
+
+        return info
+
+
+    def configure_optimizers(self, weight_decay, learning_rate, betas, device_type):
+        """
+        AdamW with correct weight-decay handling.
+        """
+        param_dict = {name: p for name, p in self.named_parameters() if p.requires_grad}
+
+        # Decay if weights >=2 dimensions (matrices)
+        decay_params = [p for n, p in param_dict.items() if p.dim() >= 2]
+        no_decay_params = [p for n, p in param_dict.items() if p.dim() < 2]
+
+        optim_groups = [
+            {'params': decay_params, 'weight_decay': weight_decay},
+            {'params': no_decay_params, 'weight_decay': 0.0},
+        ]
+
+        print(f"Optimizer groups:")
+        print(f"  Decay: {sum(p.numel() for p in decay_params):,} params")
+        print(f"  No decay: {sum(p.numel() for p in no_decay_params):,} params")
+
+        use_fused = device_type == 'cuda'
+        extra = dict(fused=True) if use_fused else {}
+
+        optimizer = torch.optim.AdamW(
+            optim_groups,
+            lr=learning_rate,
+            betas=betas,
+            **extra
+        )
+
+        return optimizer
