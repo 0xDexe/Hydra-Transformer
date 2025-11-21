@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-class TokenRouter(nn.Module):
+class TokenRouter_MLP(nn.Module):
     """
     MLP that scores each token for routing.
 

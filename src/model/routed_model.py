@@ -3,9 +3,10 @@ import torch.nn as nn
 
 from src.model.blocks.attention_core import AttentionCore
 from src.model.blocks.ssm_core import SSMCore
-from src.model.blocks.token_router import TokenRouter
+from model.blocks.scoring.token_router_mlp import TokenRouter_MLP
 from src.model.blocks.routing_block import RoutedHybridBlock
 from src.model.blocks.ffn_block import FFNBlock
+from src.model.blocks.lightweight_context_layer import LightweightContextLayer
 
 class RoutedHybridSSMTransformer(nn.Module):
     """
@@ -39,7 +40,8 @@ class RoutedHybridSSMTransformer(nn.Module):
         dropout=0.1,
         max_seq_len=8192,
         routing_topk_ratio=0.2,
-        router_hidden_dim=None,
+        router_hidden_dim=None, 
+        context_mode="conv"
     ):
         super().__init__()
         self.vocab_size = vocab_size
@@ -59,8 +61,14 @@ class RoutedHybridSSMTransformer(nn.Module):
         # Dropout for embeddings
         self.embed_dropout = nn.Dropout(dropout)
 
+        # NEW: lightweight contextualizer
+        self.context_layer = LightweightContextLayer(
+            d_model,
+            mode=context_mode
+        )
+
         # Shared token router (single routing mechanism)
-        self.router = TokenRouter(d_model, hidden_dim=router_hidden_dim)
+        self.router = TokenRouter_MLP(d_model, hidden_dim=router_hidden_dim)
 
         # Build stack of RoutedHybridBlocks + FFNBlocks
         self.layers = nn.ModuleList()
@@ -115,9 +123,17 @@ class RoutedHybridSSMTransformer(nn.Module):
         B, T = input_ids.shape
 
         # 1) Embeddings
-        x = self.token_embedding(input_ids)           # (B, T, D)
-        x = x + self.pos_embedding[:, :T, :]          # add positional encodings
-        x = self.embed_dropout(x)                     # (B, T, D)
+        # x = self.token_embedding(input_ids)           # (B, T, D)
+        # x = x + self.pos_embedding[:, :T, :]          # add positional encodings
+        # x = self.embed_dropout(x)                     # (B, T, D)
+
+        # 1) Embeddings
+        x = self.token_embedding(input_ids)            # (B, T, D)
+        x = x + self.pos_embedding[:, :T, :]           # (B, T, D)
+        x = self.embed_dropout(x)
+
+        # 2) Lightweight context layer 
+        x = self.context_layer(x)                      # (B, T, D) enriched
 
         # 2) Stacked routed hybrid blocks + FFNs
         for layer in self.layers:
