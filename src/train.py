@@ -464,8 +464,8 @@ class TrainConfig:
         # Logging
         self.use_wandb = True
         self.project_name = 'routed-hybrid-ssm-transformer'
-        self.run_name = 'routed-hybrid-baseline'
-        self.output_dir = 'outputs/routed-hybrid'
+        self.run_name = 'token_routing-v1'
+        self.output_dir = 'outputs/token_routing-v1'
         self.log_interval = 10  # Log every N steps
 
 

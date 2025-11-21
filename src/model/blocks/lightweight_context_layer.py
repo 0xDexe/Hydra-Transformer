@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 from src.model.blocks.ssm_block import SSMBlock
-from src.model.blocks.sliding_window_attention import SlidingWindowAttention
+from src.model.blocks.swa_block import SlidingWindowAttentionBlock
 
 
 class LightweightContextLayer(nn.Module):
@@ -22,7 +22,7 @@ class LightweightContextLayer(nn.Module):
         elif mode == "ssm":
             self.layer = SSMBlock(d_model)
         elif mode == "local_attn":
-            self.layer = SlidingWindowAttention(
+            self.layer = SlidingWindowAttentionBlock(
                 d_model=d_model,
                 window_size=window_size
             )

@@ -148,7 +148,7 @@ def plot_training_progress(checkpoint_dir):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Monitor training progress')
     parser.add_argument('checkpoint_dir', type=str, nargs='?', 
-                       default='outputs/baseline-v1',
+                       default='outputs/token_routing-v1',
                        help='Directory containing checkpoints and logs')
     args = parser.parse_args()
     
