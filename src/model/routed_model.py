@@ -3,7 +3,7 @@ import torch.nn as nn
 
 from src.model.blocks.attention_core import AttentionCore
 from src.model.blocks.ssm_core import SSMCore
-from model.blocks.scoring.token_router_mlp import TokenRouter_MLP
+from src.model.blocks.scoring.token_router_mlp import TokenRouter_MLP
 from src.model.blocks.routing_block import RoutedHybridBlock
 from src.model.blocks.ffn_block import FFNBlock
 from src.model.blocks.lightweight_context_layer import LightweightContextLayer

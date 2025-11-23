@@ -3,7 +3,7 @@ import torch.nn as nn
 
 from src.model.blocks.attention_core import AttentionCore
 from src.model.blocks.ssm_core import SSMCore
-from model.blocks.scoring.token_router_mlp import TokenRouter_MLP
+from src.model.blocks.scoring.token_router_mlp import TokenRouter_MLP
 
 
 class RoutedHybridBlock(nn.Module):
@@ -92,28 +92,35 @@ class RoutedHybridBlock(nn.Module):
         # 4B) Compute attention ONLY for selected tokens
         # Extract top-k tokens
         x_attn_tokens = torch.gather(
-            x_norm, 
-            dim=1, 
+            x_norm,
+            dim=1,
             index=topk_idx.unsqueeze(-1).expand(B, k, D)
         )   # (B, k, D)
 
         # Apply attention to the selected tokens
         delta_attn_tokens = self.attn_core(x_attn_tokens)   # (B, k, D)
 
+        # enforce consistent dtype with x_norm ---
+        if delta_attn_tokens.dtype != x_norm.dtype:
+            delta_attn_tokens = delta_attn_tokens.to(x_norm.dtype)
+
+        if delta_ssm is not None and delta_ssm.dtype != x_norm.dtype:
+            delta_ssm = delta_ssm.to(x_norm.dtype)
+
         # Place attention deltas back to (B, T, D) shape
         delta_attn = torch.zeros_like(x_norm)  # (B, T, D)
         delta_attn.scatter_(
             1,
             topk_idx.unsqueeze(-1).expand(B, k, D),
-            delta_attn_tokens
+            delta_attn_tokens,
         )
 
         # 5) Merge deltas per token
         if delta_ssm is None:
-            # No SSM case
             delta = delta_attn
         else:
             delta = torch.where(attn_mask, delta_attn, delta_ssm)
+
 
         # 6) Residual 
         out = residual + delta
