@@ -1,5 +1,6 @@
 import torch
 from src.model.routed_model import RoutedHybridSSMTransformer
+from src.model.hybrid_model import HybridSSMTransformer
 
 
 def test_model_forward():
@@ -9,21 +10,29 @@ def test_model_forward():
     seq_len = 128
     d_model = 256
 
-    # Instantiate routed hybrid model
-    model = RoutedHybridSSMTransformer(
+    model = HybridSSMTransformer(
         vocab_size=vocab_size,
         d_model=d_model,
-        n_layers=4,              # 4 (block + FFN) pairs
-        n_heads=8,               # 256 / 8 = 32 dim per head
-        d_state=16,
-        d_conv=4,
-        expand=2,
-        dropout=0.1,
-        max_seq_len=seq_len,
-        routing_topk_ratio=0.2,  # 20% of tokens to attention
-        router_hidden_dim=None,  # defaults to d_model
-        context_mode="conv"      # or "ssm" / "local_attn"
-    )
+        n_layers=4,
+        pattern='alternating'
+    ).to(device)
+
+    #TOKEN_ROUTING_CHANGE
+    # # Instantiate routed hybrid model
+    # model = RoutedHybridSSMTransformer(
+    #     vocab_size=vocab_size,
+    #     d_model=d_model,
+    #     n_layers=4,              # 4 (block + FFN) pairs
+    #     n_heads=8,               # 256 / 8 = 32 dim per head
+    #     d_state=16,
+    #     d_conv=4,
+    #     expand=2,
+    #     dropout=0.1,
+    #     max_seq_len=seq_len,
+    #     routing_topk_ratio=0.2,  # 20% of tokens to attention
+    #     router_hidden_dim=None,  # defaults to d_model
+    #     context_mode="conv"      # or "ssm" / "local_attn"
+    # )
 
     # Create dummy input
     input_ids = torch.randint(0, vocab_size, (batch_size, seq_len))

@@ -24,7 +24,9 @@ def load_config(config_path):
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', type=str, default='configs/tr_config.yaml')
+    parser.add_argument('--config', type=str, default='configs/baseline.yaml')
+    #TOKEN_ROUTING_CHANGE
+    # parser.add_argument('--config', type=str, default='configs/tr_config.yaml')
     args = parser.parse_args()
     
     config = load_config(args.config)
