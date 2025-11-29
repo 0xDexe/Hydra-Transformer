@@ -16,7 +16,7 @@ import argparse
 from pathlib import Path
 import glob
 
-from src.train import Trainer, TrainConfig
+from train_model import Trainer, TrainConfig
 
 
 def find_latest_checkpoint(checkpoint_dir):

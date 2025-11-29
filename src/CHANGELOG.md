@@ -65,3 +65,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Training time tracking now cumulative across resume sessions (preserves total elapsed time)
 
+## 1.4 -- 29/11/2025
+
+Refactored

@@ -12,7 +12,6 @@ import time
 import json
 from datetime import datetime
 
-from src.model.hybrid_model import HybridSSMTransformer
 from src.data.dataset import get_dataloaders
 
 
@@ -57,7 +56,14 @@ class LossLogger:
 
 
 class Trainer:
-    def __init__(self, config):
+    def __init__(self, config, model=None):
+        """
+        Initialize trainer
+        
+        Args:
+            config: Training configuration
+            model: Pre-instantiated model (optional). If None, uses default from config.
+        """
         self.config = config
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
@@ -86,29 +92,56 @@ class Trainer:
                 name=config.run_name
             )
         
-        # Create model
-        self.model = HybridSSMTransformer(
-            vocab_size=config.vocab_size,
-            d_model=config.d_model,
-            n_layers=config.n_layers,
-            pattern=config.layer_pattern,
-            n_heads=config.n_heads,
-            d_state=config.d_state,
-            d_conv=config.d_conv,
-            expand=config.expand,
-            dropout=config.dropout,
-        ).to(self.device)
+        # Use provided model or create default
+        if model is not None:
+            self.model = model.to(self.device)
+            print("Using provided model instance")
+        else:
+            # Fallback: create default model for backward compatibility
+            print("No model provided, creating default HybridSSMTransformer")
+            from src.model.hybrid_model import HybridSSMTransformer
+            self.model = HybridSSMTransformer(
+                vocab_size=config.vocab_size,
+                d_model=config.d_model,
+                n_layers=config.n_layers,
+                pattern=config.layer_pattern,
+                n_heads=config.n_heads,
+                d_state=config.d_state,
+                d_conv=config.d_conv,
+                expand=config.expand,
+                dropout=config.dropout,
+            ).to(self.device)
         
+        # Print model info
         print(f"\n{'='*60}")
         print("MODEL CONFIGURATION")
         print(f"{'='*60}")
-        print(f"Total parameters: {self.model.get_num_params() / 1e6:.2f}M")
-        print(f"Non-embedding parameters: {self.model.get_num_params(non_embedding=True) / 1e6:.2f}M")
-        print(f"Pattern: {config.layer_pattern}")
+        print(f"Model type: {type(self.model).__name__}")
+        
+        # Try to get model info if methods exist
+        if hasattr(self.model, 'get_num_params'):
+            print(f"Total parameters: {self.model.get_num_params() / 1e6:.2f}M")
+            if hasattr(self.model, 'get_num_params'):
+                try:
+                    non_emb_params = self.model.get_num_params(non_embedding=True)
+                    print(f"Non-embedding parameters: {non_emb_params / 1e6:.2f}M")
+                except:
+                    pass
+        else:
+            # Count parameters manually
+            total_params = sum(p.numel() for p in self.model.parameters())
+            print(f"Total parameters: {total_params / 1e6:.2f}M")
+        
+        if hasattr(config, 'layer_pattern'):
+            print(f"Pattern: {config.layer_pattern}")
+        
         print(f"Training dtype: {self.dtype}")
-        print("\nLayer structure:")
-        for layer_info in self.model.get_layer_info():
-            print(f"  {layer_info}")
+        
+        if hasattr(self.model, 'get_layer_info'):
+            print("\nLayer structure:")
+            for layer_info in self.model.get_layer_info():
+                print(f"  {layer_info}")
+        
         print(f"{'='*60}\n")
         
         # Data loaders
@@ -127,12 +160,22 @@ class Trainer:
             config.vocab_size = len(self.tokenizer)
         
         # Optimizer with proper weight decay configuration
-        self.optimizer = self.model.configure_optimizers(
-            weight_decay=config.weight_decay,
-            learning_rate=config.learning_rate,
-            betas=(0.9, 0.95),
-            device_type='cuda' if torch.cuda.is_available() else 'cpu'
-        )
+        # Try to use model's configure_optimizers if available
+        if hasattr(self.model, 'configure_optimizers'):
+            self.optimizer = self.model.configure_optimizers(
+                weight_decay=config.weight_decay,
+                learning_rate=config.learning_rate,
+                betas=(0.9, 0.95),
+                device_type='cuda' if torch.cuda.is_available() else 'cpu'
+            )
+        else:
+            # Default optimizer
+            self.optimizer = AdamW(
+                self.model.parameters(),
+                lr=config.learning_rate,
+                weight_decay=config.weight_decay,
+                betas=(0.9, 0.95)
+            )
         
         # Scheduler
         self.scheduler = CosineAnnealingLR(
@@ -235,6 +278,7 @@ class Trainer:
             'config': self.config,
             'training_time': time.time() - self.training_start_time,
             'dtype': str(self.dtype),
+            'model_type': type(self.model).__name__,  # Save model type for reference
         }
         
         # Save checkpoint with epoch number
