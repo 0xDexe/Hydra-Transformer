@@ -7,3 +7,5 @@ __pycache__/
 .vscode/    
 *.log
 *.sqlite3   
+outputs/
+wandb/
