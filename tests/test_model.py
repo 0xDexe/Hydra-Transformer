@@ -8,16 +8,17 @@ def test_model_forward():
     seq_len = 128
     d_model = 256
     
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     model = HybridSSMTransformer(
         vocab_size=vocab_size,
         d_model=d_model,
         n_layers=4,
         pattern='alternating'
-    )
+    ).to(device)
     
     # Create dummy input
-    input_ids = torch.randint(0, vocab_size, (batch_size, seq_len))
-    labels = torch.randint(0, vocab_size, (batch_size, seq_len))
+    input_ids = torch.randint(0, vocab_size, (batch_size, seq_len)).to(device)
+    labels = torch.randint(0, vocab_size, (batch_size, seq_len)).to(device)
     
     # Forward pass
     loss, logits = model(input_ids, labels=labels)
