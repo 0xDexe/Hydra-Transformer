@@ -50,7 +50,7 @@ This will:
 
 ```bash
 # Train with the baseline configuration
-python tests/train_from_config.py --config config/baseline.yaml
+python tests/train_from_config.py --config config/tr_config.yaml
 ```
 
 This will:

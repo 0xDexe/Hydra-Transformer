@@ -216,8 +216,8 @@ class Trainer:
         self.output_dir = Path(config.output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
-        # Time-based checkpointing (every 2 hours)
-        self.checkpoint_interval_seconds = 2 * 60 * 60  # 2 hours
+        # Time-based checkpointing (every 4 hours)
+        self.checkpoint_interval_seconds = 4 * 60 * 60  # 4 hours
         self.last_checkpoint_time = time.time()
         self.training_start_time = time.time()
         
