@@ -82,9 +82,8 @@ After testing/training:
 outputs/
 └── baseline-v1/  (or test/)
     ├── training_log.jsonl        # Complete training log
-    ├── checkpoint_latest.pt      # Latest model
-    ├── checkpoint_best.pt        # Best model
-    └── checkpoint_time_*.pt      # Time-based checkpoints
+    ├── checkpoint_epoch_{epoch}.pt      # Latet epoch model
+
 ```
 
 ---
@@ -103,7 +102,46 @@ Example entry:
 ```
 
 ---
+## Additional Features
 
+### Resume Training Automatically 
+
+1. Resume from a specific checkpoint:
+
+```
+python  scripts/resume_training.py \
+    --checkpoint outputs/baseline/checkpoint_epoch_5.pt \
+    --num_epochs 10
+```
+
+2. Auto-detect latest checkpoint:
+
+```
+python  scripts/resume_training.py \
+    --checkpoint_dir outputs/baseline \
+    --num_epochs 5
+```
+
+3. Resume with different output directory:
+
+```
+python scripts/resume_training.py \
+    --checkpoint outputs/baseline/checkpoint_epoch_5.pt \
+    --num_epochs 10 \
+    --output_dir outputs/baseline_continued
+```
+
+
+4. Just continue with original config:
+```
+python  scripts/resume_training.py \
+    --checkpoint outputs/baseline/checkpoint_epoch_5.pt
+
+```
+
+
+
+---
 ## Common Issues
 
 ### 1. Import Error
