@@ -86,8 +86,35 @@ class RoutedHybridBlock(nn.Module):
         attn_mask.scatter_(1, topk_idx, True)  # mark top-k positions
         attn_mask = attn_mask.unsqueeze(-1)    # (B, T, 1)
 
-        # 4A) Compute SSM for ALL tokens
-        delta_ssm = self.ssm_core(x_norm) if self.compute_full_ssm else None
+        # NEW: compute bottom-token indices for SSM 
+        # bottom_mask: True where token is *not* in top-k
+        bottom_mask = ~attn_mask.squeeze(-1)          # (B, T)
+
+        # indices of bottom tokens per batch: shape (B, T - k)
+        seq_idx = torch.arange(T, device=x.device).unsqueeze(0).expand(B, T)  # (B, T)
+        bottom_idx = seq_idx.masked_select(bottom_mask).view(B, T - k)        # (B, T-k)
+
+        # 4A) Compute SSM ONLY for bottom tokens
+        if self.compute_full_ssm:
+            # Gather bottom tokens
+            x_ssm_tokens = torch.gather(
+                x_norm,
+                dim=1,
+                index=bottom_idx.unsqueeze(-1).expand(B, T - k, D)
+            )  # (B, T-k, D)
+
+            # Apply SSM on bottom tokens
+            delta_ssm_tokens = self.ssm_core(x_ssm_tokens)  # (B, T-k, D)
+
+            # Scatter SSM deltas back into full (B, T, D) tensor
+            delta_ssm = torch.zeros_like(x_norm)  # (B, T, D)
+            delta_ssm.scatter_(
+                1,
+                bottom_idx.unsqueeze(-1).expand(B, T - k, D),
+                delta_ssm_tokens,
+            )
+        else:
+            delta_ssm = None
 
         # 4B) Compute attention ONLY for selected tokens
         # Extract top-k tokens
@@ -100,7 +127,7 @@ class RoutedHybridBlock(nn.Module):
         # Apply attention to the selected tokens
         delta_attn_tokens = self.attn_core(x_attn_tokens)   # (B, k, D)
 
-        # enforce consistent dtype with x_norm ---
+        # enforce consistent dtype with x_norm 
         if delta_attn_tokens.dtype != x_norm.dtype:
             delta_attn_tokens = delta_attn_tokens.to(x_norm.dtype)
 
@@ -119,8 +146,8 @@ class RoutedHybridBlock(nn.Module):
         if delta_ssm is None:
             delta = delta_attn
         else:
+            # top-k tokens use attention, others use SSM
             delta = torch.where(attn_mask, delta_attn, delta_ssm)
-
 
         # 6) Residual 
         out = residual + delta

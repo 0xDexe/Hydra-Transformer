@@ -1,4 +1,4 @@
-from src.train import Trainer, TrainConfig
+from train_model import Trainer, TrainConfig
 
 # Override config for quick test
 config = TrainConfig()

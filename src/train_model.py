@@ -17,108 +17,54 @@ from src.data.dataset import get_dataloaders
 
 
 class LossLogger:
-    """Logger for tracking and saving losses"""
+    """Logger for tracking losses per epoch"""
     
-    def __init__(self, log_dir, log_interval=10):
+    def __init__(self, log_dir):
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
         
         self.log_file = self.log_dir / 'training_log.jsonl'
-        self.loss_history = []
-        self.log_interval = log_interval
-        
-        # Track significant changes
-        self.last_logged_loss = None
-        self.significant_change_threshold = 0.1  # 10% change
-        
         print(f"Loss logger initialized: {self.log_file}")
     
-    def log(self, step, epoch, loss, lr, split='train', force=False):
-        """
-        Log loss value
-        
-        Args:
-            step: Current training step
-            epoch: Current epoch
-            loss: Loss value
-            lr: Learning rate
-            split: 'train' or 'val'
-            force: Force logging regardless of interval
-        """
-        timestamp = datetime.now().isoformat()
-        
-        log_entry = {
-            'timestamp': timestamp,
-            'step': step,
-            'epoch': epoch,
-            'split': split,
-            'loss': float(loss),
-            'lr': float(lr),
-        }
-        
-        # Check if we should log based on interval or significant change
-        should_log = force
-        
-        if not should_log and step % self.log_interval == 0:
-            should_log = True
-        
-        # Check for significant change
-        if not should_log and self.last_logged_loss is not None:
-            change_ratio = abs(loss - self.last_logged_loss) / (self.last_logged_loss + 1e-8)
-            if change_ratio >= self.significant_change_threshold:
-                should_log = True
-                log_entry['significant_change'] = True
-                log_entry['change_ratio'] = float(change_ratio)
-        
-        if should_log:
-            # Append to history
-            self.loss_history.append(log_entry)
-            
-            # Write to file
-            with open(self.log_file, 'a') as f:
-                f.write(json.dumps(log_entry) + '\n')
-            
-            self.last_logged_loss = loss
-    
-    def log_validation(self, epoch, val_loss, val_perplexity):
-        """Log validation metrics"""
+    def log_epoch(self, epoch, train_loss, val_loss, val_perplexity, epoch_time, lr):
+        """Log all metrics for an epoch"""
         timestamp = datetime.now().isoformat()
         
         log_entry = {
             'timestamp': timestamp,
             'epoch': epoch,
-            'split': 'validation',
+            'train_loss': float(train_loss),
             'val_loss': float(val_loss),
             'val_perplexity': float(val_perplexity),
+            'epoch_time_seconds': float(epoch_time),
+            'learning_rate': float(lr),
         }
         
-        self.loss_history.append(log_entry)
-        
+        # Write to file
         with open(self.log_file, 'a') as f:
             f.write(json.dumps(log_entry) + '\n')
-    
-    def log_checkpoint(self, epoch, checkpoint_type, checkpoint_path):
-        """Log checkpoint save"""
-        timestamp = datetime.now().isoformat()
         
-        log_entry = {
-            'timestamp': timestamp,
-            'epoch': epoch,
-            'event': 'checkpoint_saved',
-            'checkpoint_type': checkpoint_type,
-            'checkpoint_path': str(checkpoint_path),
-        }
-        
-        with open(self.log_file, 'a') as f:
-            f.write(json.dumps(log_entry) + '\n')
-    
-    def get_recent_losses(self, n=100):
-        """Get recent loss values"""
-        return [entry['loss'] for entry in self.loss_history[-n:] if 'loss' in entry]
+        # Print to console
+        print(f"\n{'='*60}")
+        print(f"EPOCH {epoch} SUMMARY")
+        print(f"{'='*60}")
+        print(f"Train Loss:       {train_loss:.4f}")
+        print(f"Val Loss:         {val_loss:.4f}")
+        print(f"Val Perplexity:   {val_perplexity:.2f}")
+        print(f"Epoch Time:       {epoch_time:.1f}s")
+        print(f"Learning Rate:    {lr:.2e}")
+        print(f"{'='*60}\n")
 
 
 class Trainer:
-    def __init__(self, config):
+    def __init__(self, config, model=None):
+        """
+        Initialize trainer
+        
+        Args:
+            config: Training configuration
+            model: Pre-instantiated model (optional). If None, uses default from config.
+        """
         self.config = config
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
@@ -146,33 +92,60 @@ class Trainer:
                 config=config.__dict__,
                 name=config.run_name
             )
+
+        # Use provided model or create default
+        if model is not None:
+            self.model = model.to(self.device)
+            print("Using provided model instance")
+        else:
+            # Fallback: create default model for backward compatibility
+            print("No model provided, creating default HybridSSMTransformer")
+            from src.model.hybrid_model import HybridSSMTransformer
+            self.model = HybridSSMTransformer(
+                vocab_size=config.vocab_size,
+                d_model=config.d_model,
+                n_layers=config.n_layers,
+                pattern=config.layer_pattern,
+                n_heads=config.n_heads,
+                d_state=config.d_state,
+                d_conv=config.d_conv,
+                expand=config.expand,
+                dropout=config.dropout,
+            ).to(self.device)
+
         
-        # Create model
-        self.model = RoutedHybridSSMTransformer(
-            vocab_size=config.vocab_size,
-            d_model=config.d_model,
-            n_layers=config.n_layers,
-            n_heads=config.n_heads,
-            d_state=config.d_state,
-            d_conv=config.d_conv,
-            expand=config.expand,
-            dropout=config.dropout,
-            max_seq_len=config.max_length,
-            routing_topk_ratio=config.routing_topk_ratio,
-            router_hidden_dim=config.router_hidden_dim,
-        ).to(self.device)
-        
+        # Print model info
         print(f"\n{'='*60}")
         print("MODEL CONFIGURATION")
         print(f"{'='*60}")
-        print(f"Total parameters: {self.model.get_num_params() / 1e6:.2f}M")
-        print(f"Non-embedding parameters: {self.model.get_num_params(non_embedding=True) / 1e6:.2f}M")
-        print(f"Routing: topk_ratio={config.routing_topk_ratio}, "
-            f"context_mode={self.model.context_layer.mode}")
+
+
+        print(f"Model type: {type(self.model).__name__}")
+        
+        # Try to get model info if methods exist
+        if hasattr(self.model, 'get_num_params'):
+            print(f"Total parameters: {self.model.get_num_params() / 1e6:.2f}M")
+            if hasattr(self.model, 'get_num_params'):
+                try:
+                    non_emb_params = self.model.get_num_params(non_embedding=True)
+                    print(f"Non-embedding parameters: {non_emb_params / 1e6:.2f}M")
+                except:
+                    pass
+        else:
+            # Count parameters manually
+            total_params = sum(p.numel() for p in self.model.parameters())
+            print(f"Total parameters: {total_params / 1e6:.2f}M")
+        
+        if hasattr(config, 'layer_pattern'):
+            print(f"Pattern: {config.layer_pattern}")
+        
         print(f"Training dtype: {self.dtype}")
-        print("\nLayer structure:")
-        for layer_info in self.model.get_layer_info():
-            print(f"  {layer_info}")
+        
+        if hasattr(self.model, 'get_layer_info'):
+            print("\nLayer structure:")
+            for layer_info in self.model.get_layer_info():
+                print(f"  {layer_info}")
+        
         print(f"{'='*60}\n")
         
         # Data loaders
@@ -191,12 +164,22 @@ class Trainer:
             config.vocab_size = len(self.tokenizer)
         
         # Optimizer with proper weight decay configuration
-        self.optimizer = self.model.configure_optimizers(
-            weight_decay=config.weight_decay,
-            learning_rate=config.learning_rate,
-            betas=(0.9, 0.95),
-            device_type='cuda' if torch.cuda.is_available() else 'cpu'
-        )
+        # Try to use model's configure_optimizers if available
+        if hasattr(self.model, 'configure_optimizers'):
+            self.optimizer = self.model.configure_optimizers(
+                weight_decay=config.weight_decay,
+                learning_rate=config.learning_rate,
+                betas=(0.9, 0.95),
+                device_type='cuda' if torch.cuda.is_available() else 'cpu'
+            )
+        else:
+            # Default optimizer
+            self.optimizer = AdamW(
+                self.model.parameters(),
+                lr=config.learning_rate,
+                weight_decay=config.weight_decay,
+                betas=(0.9, 0.95)
+            )
         
         # Scheduler
         self.scheduler = CosineAnnealingLR(
@@ -206,23 +189,16 @@ class Trainer:
         )
         
         # Loss logger
-        self.loss_logger = LossLogger(
-            log_dir=config.output_dir,
-            log_interval=config.log_interval
-        )
+        self.loss_logger = LossLogger(log_dir=config.output_dir)
         
         # For checkpointing
-        self.best_val_loss = float('inf')
         self.output_dir = Path(config.output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
-        # Time-based checkpointing (every 4 hours)
-        self.checkpoint_interval_seconds = 4 * 60 * 60  # 4 hours
-        self.last_checkpoint_time = time.time()
-        self.training_start_time = time.time()
-        
+
         # Global step counter
         self.global_step = 0
+        self.training_start_time = time.time()
         
     def train_epoch(self, epoch):
         """Train for one epoch"""
@@ -230,12 +206,13 @@ class Trainer:
         total_loss = 0
         epoch_start_time = time.time()
         
+        total_steps = len(self.train_loader)
         pbar = tqdm(self.train_loader, desc=f"Epoch {epoch}")
-        for batch_idx, batch in enumerate(pbar):
+        for batch_idx, batch in enumerate(pbar, 1):
             input_ids = batch['input_ids'].to(self.device)
             labels = batch['labels'].to(self.device)
             
-            # Forward pass with autocast for mixed precision
+            # Forward pass with autocast
             with autocast('cuda', enabled=self.use_amp, dtype=self.dtype):
                 loss, logits = self.model(input_ids, labels=labels)
             
@@ -243,65 +220,29 @@ class Trainer:
             self.optimizer.zero_grad()
             self.scaler.scale(loss).backward()
             
-            # Gradient clipping (unscale first for accurate clipping)
+            # Gradient clipping
             self.scaler.unscale_(self.optimizer)
             torch.nn.utils.clip_grad_norm_(
                 self.model.parameters(),
                 self.config.grad_clip
             )
             
-            # Optimizer step with scaler
+            # Optimizer step
             self.scaler.step(self.optimizer)
             self.scaler.update()
-            
             self.scheduler.step()
             
             # Update metrics
             total_loss += loss.item()
             self.global_step += 1
             
-            # Get current learning rate
-            current_lr = self.scheduler.get_last_lr()[0]
-            
-            # Log loss
-            self.loss_logger.log(
-                step=self.global_step,
-                epoch=epoch,
-                loss=loss.item(),
-                lr=current_lr,
-                split='train'
-            )
-            
             # Update progress bar
+            current_lr = self.scheduler.get_last_lr()[0]
             pbar.set_postfix({
+                'step': f"{batch_idx}/{total_steps}",
                 'loss': f"{loss.item():.4f}",
                 'lr': f"{current_lr:.2e}"
             })
-            
-            # WandB logging
-            if self.config.use_wandb and batch_idx % 10 == 0:
-                wandb.log({
-                    'train/loss': loss.item(),
-                    'train/lr': current_lr,
-                    'train/step': self.global_step,
-                    'train/epoch': epoch,
-                })
-            
-            # Time-based checkpoint (every 2 hours)
-            current_time = time.time()
-            time_since_last_checkpoint = current_time - self.last_checkpoint_time
-            
-            if time_since_last_checkpoint >= self.checkpoint_interval_seconds:
-                print(f"\n 2-hour checkpoint triggered")
-                val_loss, perplexity = self.validate()
-                self.save_checkpoint(
-                    epoch=epoch,
-                    val_loss=val_loss,
-                    is_best=False,
-                    checkpoint_type='time_based'
-                )
-                self.last_checkpoint_time = current_time
-                self.model.train()  # Return to training mode
         
         avg_loss = total_loss / len(self.train_loader)
         epoch_time = time.time() - epoch_start_time
@@ -329,16 +270,8 @@ class Trainer:
         
         return avg_loss, perplexity.item()
     
-    def save_checkpoint(self, epoch, val_loss, is_best=False, checkpoint_type='regular'):
-        """
-        Save model checkpoint
-        
-        Args:
-            epoch: Current epoch
-            val_loss: Validation loss
-            is_best: Whether this is the best model so far
-            checkpoint_type: Type of checkpoint ('regular', 'best', 'time_based')
-        """
+    def save_checkpoint(self, epoch, val_loss):
+        """Save model checkpoint for this epoch"""
         checkpoint = {
             'epoch': epoch,
             'global_step': self.global_step,
@@ -347,31 +280,16 @@ class Trainer:
             'scheduler_state_dict': self.scheduler.state_dict(),
             'scaler_state_dict': self.scaler.state_dict() if self.use_amp else None,
             'val_loss': val_loss,
-            'best_val_loss': self.best_val_loss,
             'config': self.config,
             'training_time': time.time() - self.training_start_time,
             'dtype': str(self.dtype),
+            'model_type': type(self.model).__name__,  # Save model type for reference
         }
         
-        # Save latest
-        path = self.output_dir / 'checkpoint_latest.pt'
+        # Save checkpoint with epoch number
+        path = self.output_dir / f'checkpoint_epoch_{epoch}.pt'
         torch.save(checkpoint, path)
-        
-        # Save best
-        if is_best:
-            path = self.output_dir / 'checkpoint_best.pt'
-            torch.save(checkpoint, path)
-            print(f"Saved best model with val_loss: {val_loss:.4f}")
-            self.loss_logger.log_checkpoint(epoch, 'best', path)
-        
-        # Time-based checkpoint
-        if checkpoint_type == 'time_based':
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            hours = int((time.time() - self.training_start_time) / 3600)
-            path = self.output_dir / f'checkpoint_time_{hours}h_{timestamp}.pt'
-            torch.save(checkpoint, path)
-            print(f" Saved time-based checkpoint ({hours}h): {path.name}")
-            self.loss_logger.log_checkpoint(epoch, f'time_based_{hours}h', path)
+        print(f"Saved checkpoint: {path.name}")
     
     def train(self):
         """Main training loop"""
@@ -383,41 +301,43 @@ class Trainer:
         print(f"Mixed precision: {self.use_amp}")
         print(f"Output directory: {self.output_dir}")
         print(f"Logging to: {self.loss_logger.log_file}")
-        print(f"Checkpoint interval: {self.checkpoint_interval_seconds / 3600:.1f} hours")
         print(f"{'='*60}\n")
         
         for epoch in range(self.config.num_epochs):
-            print(f"\n{'='*60}")
-            print(f"Epoch {epoch + 1}/{self.config.num_epochs}")
-            print(f"{'='*60}")
-            
             # Train
             train_loss, epoch_time = self.train_epoch(epoch)
-            print(f"Train loss: {train_loss:.4f} (time: {epoch_time:.1f}s)")
             
             # Validate
             val_loss, perplexity = self.validate()
-            print(f"Val loss: {val_loss:.4f}, Perplexity: {perplexity:.2f}")
             
-            # Log validation metrics
-            self.loss_logger.log_validation(epoch, val_loss, perplexity)
+            # Get current learning rate
+            current_lr = self.scheduler.get_last_lr()[0]
             
-            # WandB logging
+            # Log all metrics for this epoch
+            self.loss_logger.log_epoch(
+                epoch=epoch,
+                train_loss=train_loss,
+                val_loss=val_loss,
+                val_perplexity=perplexity,
+                epoch_time=epoch_time,
+                lr=current_lr
+            )
+            
+            # WandB logging (per epoch)
             if self.config.use_wandb:
                 wandb.log({
+                    'epoch': epoch,
+                    'train/loss': train_loss,
                     'val/loss': val_loss,
                     'val/perplexity': perplexity,
-                    'epoch': epoch,
-                    'train/epoch_loss': train_loss,
+                    'train/lr': current_lr,
+                    'train/epoch_time': epoch_time,
                 })
             
-            # Save checkpoint
-            is_best = val_loss < self.best_val_loss
-            if is_best:
-                self.best_val_loss = val_loss
-            
-            self.save_checkpoint(epoch, val_loss, is_best)
+            # Save checkpoint every epoch
+            self.save_checkpoint(epoch, val_loss)
         
+        # Training summary
         total_training_time = time.time() - self.training_start_time
         hours = int(total_training_time / 3600)
         minutes = int((total_training_time % 3600) / 60)
@@ -425,7 +345,6 @@ class Trainer:
         print(f"\n{'='*60}")
         print("TRAINING COMPLETE!")
         print(f"{'='*60}")
-        print(f"Best validation loss: {self.best_val_loss:.4f}")
         print(f"Total training time: {hours}h {minutes}m")
         print(f"Loss log saved to: {self.loss_logger.log_file}")
         print(f"{'='*60}\n")
@@ -457,7 +376,7 @@ class TrainConfig:
         
         # Training
         self.num_epochs = 10
-        self.learning_rate = 3e-4
+        self.learning_rate = float(0.0003)
         self.weight_decay = 0.01
         self.grad_clip = 1.0
         self.use_mixed_precision = True  # Enable mixed precision training
@@ -468,6 +387,7 @@ class TrainConfig:
         self.run_name = 'token_routing-v1'
         self.output_dir = 'outputs/token_routing-v1'
         self.log_interval = 10  # Log every N steps
+
 
 
 if __name__ == '__main__':

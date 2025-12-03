@@ -28,7 +28,13 @@ training:
 # Logging
 logging:
   use_wandb: true
+<<<<<<< HEAD:config/tr_config.yaml
   project_name: 'token_routing-v1'
   run_name: 'token_routing-v1'
   output_dir: '/projectnb/cs523aw/students/waqar/outputs/token_routing-v1'
   log_interval: 100
+=======
+  project_name: 'hybrid-ssm-transformer'
+  run_name: 'baseline-hybrid-v1'
+  output_dir: 'outputs/baseline-v1'
+>>>>>>> master:config/baseline.yaml

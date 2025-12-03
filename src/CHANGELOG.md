@@ -34,3 +34,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - use_flash_attn: Enable/disable FlashAttention (default: True)
 
 - config.use_mixed_precision = True  # Default: True
+
+## 29/11/2025
+
+1. Merged for shared cluster compatibility
+
+## 2. 1.2.2
+### Changed 
+- Saves one checkpoint per epoch
+
+### Removed 
+- Removes time-based checkpointing
+- Removes best checkpoint tracking
+- Removed significance based loss logging in 'LossLogger' 
+- Removed 'log_interval' in 'TrainConfig'
+- Removed all batch-level logging (no more batch_idx % 10 checks)
+
+### Added
+- Prints a formatted summary to console AND writes to JSON file
+- Progress bar to show progress bar percentage, current step / total steps in the epoch, current batch loss, current learning rate
+
+## 3. 1.3 
+
+- Auto-detection of latest checkpoint in directory with --checkpoint_dir flag
+- Full state restoration: model weights, optimizer state, scheduler state, gradient scaler, global step counter
+- Support for extending training with --num_epochs to specify additional epochs
+- Optional --output_dir flag to save resumed training to a different directory
+
+### Changed
+
+- Training time tracking now cumulative across resume sessions (preserves total elapsed time)
+
+## 1.4 -- 29/11/2025
+
+Refactored
