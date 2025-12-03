@@ -106,6 +106,9 @@ class RoutedHybridBlock(nn.Module):
             # Apply SSM on bottom tokens
             delta_ssm_tokens = self.ssm_core(x_ssm_tokens)  # (B, T-k, D)
 
+            if delta_ssm_tokens.dtype != x_norm.dtype:
+                delta_ssm_tokens = delta_ssm_tokens.to(x_norm.dtype)
+
             # Scatter SSM deltas back into full (B, T, D) tensor
             delta_ssm = torch.zeros_like(x_norm)  # (B, T, D)
             delta_ssm.scatter_(
