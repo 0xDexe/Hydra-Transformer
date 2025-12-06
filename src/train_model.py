@@ -112,11 +112,13 @@ class Trainer:
                 dropout=config.dropout,
             ).to(self.device)
         
+            
         # Print model info
         print(f"\n{'='*60}")
         print("MODEL CONFIGURATION")
         print(f"{'='*60}")
-        print(f"Model type: {type(self.model).__name__}")
+        print(f"Model type: {type(self.model).__name__}")        
+        
         
         # Try to get model info if methods exist
         if hasattr(self.model, 'get_num_params'):
@@ -177,12 +179,15 @@ class Trainer:
                 betas=(0.9, 0.95)
             )
         
+        self.model = torch.compile(self.model)
+
         # Scheduler
         self.scheduler = CosineAnnealingLR(
             self.optimizer,
             T_max=config.num_epochs * len(self.train_loader),
             eta_min=config.learning_rate * 0.1
         )
+        
         
         # Loss logger
         self.loss_logger = LossLogger(log_dir=config.output_dir)

@@ -207,6 +207,7 @@ def test_router_loss():
         diversity_weight=0.005
     )
     
+    # With return_components=True, type checker should know this returns tuple
     total_loss, components = loss_fn(router_outputs, return_components=True)
     
     print(f"✓ Total loss: {total_loss.item():.6f}")

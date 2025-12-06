@@ -1,0 +1,63 @@
+# Routed HYDRA Configuration
+# Learned token routing with comprehensive safeguards
+
+# Model Architecture
+model:
+  d_model: 768
+  n_layers: 12
+  n_heads: 12
+  d_state: 16
+  d_conv: 4
+  expand: 2
+  d_ff: null  # Defaults to 4 * d_model
+  dropout: 0.1
+  tie_weights: true
+
+# Router Configuration
+router:
+  hidden_dim: 64  # Keep small for efficiency (~0.05% params)
+  target_ratio: 0.15  # Route 15% of tokens to attention
+  use_gradient_balancing: true
+  use_position_invariance: true  # Prevent positional bias
+  use_checkpoint: false  # Activation checkpointing (for large models)
+
+# Router Curriculum Learning
+curriculum:
+  warmup_steps: 2000  # Steps before router starts learning
+  heuristic_type: 'uniform'  # 'uniform', 'entropy', 'random'
+
+# Router Loss Weights
+router_loss:
+  total_weight: 0.01  # Weight of router loss vs LM loss
+  load_balance: 0.01  # Encourage target routing ratio
+  entropy: 0.01  # Encourage diverse routing
+  variance: 0.01  # Prevent all-same probabilities
+  position_invariance: 0.005  # Penalize position dependence
+  layer_diversity: 0.005  # Encourage different layers to route differently
+
+# Data Configuration
+data:
+  dataset_name: 'wikitext'
+  dataset_config: 'wikitext-103-v1'
+  tokenizer_name: 'gpt2'
+  max_length: 1024
+  batch_size: 8
+  num_workers: 4
+
+# Training Configuration
+training:
+  num_epochs: 10
+  learning_rate: 3.0e-4
+  router_lr_multiplier: 1.0  # Separate LR for router if != 1.0
+  weight_decay: 0.01
+  grad_clip: 1.0
+
+# Logging & Monitoring
+logging:
+  use_wandb: true
+  project_name: 'hydra-routed'
+  run_name: 'routed-hybrid-v1'
+  output_dir: 'outputs/routed-v1'
+  log_interval: 10  # Log every N batches
+  monitor_interval: 100  # Detailed routing stats every N batches
+  save_every: 5  # Save checkpoint every N epochs

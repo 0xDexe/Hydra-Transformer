@@ -20,7 +20,7 @@ import yaml
 from pathlib import Path
 
 from src.models import ModelType, get_model_type, get_default_config, list_models, create_model
-from train_model import Trainer, TrainConfig
+from src.train_model import Trainer, TrainConfig
 
 
 def load_config_from_yaml(yaml_path):
