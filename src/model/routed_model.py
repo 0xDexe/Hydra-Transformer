@@ -10,7 +10,7 @@ try:
 except ImportError:
     HAS_FLASH_ATTN = False
 
-from .token_router import EfficientTokenRouter, GradientScaler
+from src.model.router import EfficientTokenRouter, GradientScaler
 
 
 class SSMBlock(nn.Module):

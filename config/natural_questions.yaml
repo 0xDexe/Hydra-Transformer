@@ -1,0 +1,66 @@
+# Natural Questions (Closed-Book) Configuration
+# Question answering without context
+# Tests knowledge retention and compact answer generation
+
+model:
+  d_model: 768
+  n_layers: 12
+  n_heads: 12
+  d_state: 16
+  d_conv: 4
+  expand: 2
+  dropout: 0.1
+  tie_weights: true
+
+router:
+  hidden_dim: 64
+  target_ratio: 0.15
+  use_gradient_balancing: true
+  use_position_invariance: true
+  use_checkpoint: false
+
+curriculum:
+  warmup_steps: 2000
+  heuristic_type: 'uniform'
+
+router_loss:
+  total_weight: 0.01
+  load_balance: 0.01
+  entropy: 0.01
+  variance: 0.01
+  position_invariance: 0.005
+  layer_diversity: 0.005
+
+# Natural Questions-specific data config
+data:
+  dataset_name: 'natural_questions'
+  tokenizer_name: 'gpt2'
+  max_length: 512  # Shorter - no context in closed-book
+  batch_size: 16   # Larger batch with shorter sequences
+  num_workers: 4
+  
+  # Dataset-specific options
+  include_context: false  # Closed-book QA
+  max_train_samples: 20000  # NQ is large, limit for speed
+  max_val_samples: 2000
+
+training:
+  num_epochs: 15
+  learning_rate: float(0.003)
+  weight_decay: 0.01
+  grad_clip: 1.0
+  
+  # Optimizations
+  use_amp: true
+  gradient_accumulation_steps: 2  # Effective batch = 32
+  use_fused_optimizer: true
+  compile_model: true
+
+logging:
+  use_wandb: true
+  project_name: 'hydra-nq'
+  run_name: 'nq-closedbook-routed-v1'
+  output_dir: 'outputs/natural_questions'
+  log_interval: 50
+  monitor_interval: 200
+  save_every: 5

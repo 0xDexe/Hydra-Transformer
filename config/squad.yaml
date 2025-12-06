@@ -1,0 +1,65 @@
+# SQuAD 2.0 Configuration
+# Reading comprehension with context
+# Faster alternative to NarrativeQA, good for quick experiments
+
+model:
+  d_model: 768
+  n_layers: 12
+  n_heads: 12
+  d_state: 16
+  d_conv: 4
+  expand: 2
+  dropout: 0.1
+  tie_weights: true
+
+router:
+  hidden_dim: 64
+  target_ratio: 0.15
+  use_gradient_balancing: true
+  use_position_invariance: true
+  use_checkpoint: false
+
+curriculum:
+  warmup_steps: 1000
+  heuristic_type: 'uniform'
+
+router_loss:
+  total_weight: 0.01
+  load_balance: 0.01
+  entropy: 0.01
+  variance: 0.01
+  position_invariance: 0.005
+  layer_diversity: 0.005
+
+# SQuAD-specific data config
+data:
+  dataset_name: 'squad'
+  tokenizer_name: 'gpt2'
+  max_length: 1024
+  batch_size: 8
+  num_workers: 4
+  
+  # Dataset-specific options
+  max_train_samples: null  # Use full dataset (it's not too large)
+  max_val_samples: null
+
+training:
+  num_epochs: 10
+  learning_rate: float(0.003)
+  weight_decay: 0.01
+  grad_clip: 1.0
+  
+  # Optimizations
+  use_amp: true
+  gradient_accumulation_steps: 2
+  use_fused_optimizer: true
+  compile_model: true
+
+logging:
+  use_wandb: true
+  project_name: 'hydra-squad'
+  run_name: 'squad-routed-v1'
+  output_dir: 'outputs/squad'
+  log_interval: 50
+  monitor_interval: 200
+  save_every: 3

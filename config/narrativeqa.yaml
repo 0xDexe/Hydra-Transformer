@@ -1,0 +1,66 @@
+# NarrativeQA Configuration
+# Long-form reading comprehension dataset
+# Better for evaluating long-context understanding and routing
+
+model:
+  d_model: 768
+  n_layers: 12
+  n_heads: 12
+  d_state: 16
+  d_conv: 4
+  expand: 2
+  dropout: 0.1
+  tie_weights: true
+
+router:
+  hidden_dim: 64
+  target_ratio: 0.15
+  use_gradient_balancing: true
+  use_position_invariance: true
+  use_checkpoint: false
+
+curriculum:
+  warmup_steps: 2000
+  heuristic_type: 'uniform'
+
+router_loss:
+  total_weight: 0.01
+  load_balance: 0.01
+  entropy: 0.01
+  variance: 0.01
+  position_invariance: 0.005
+  layer_diversity: 0.005
+
+# NarrativeQA-specific data config
+data:
+  dataset_name: 'narrativeqa'
+  tokenizer_name: 'gpt2'
+  max_length: 2048  # Longer sequences for full stories
+  batch_size: 4     # Smaller batch due to longer sequences
+  num_workers: 4
+  
+  # Dataset-specific options
+  use_summary: true  # Use summaries (faster) vs full documents
+  max_train_samples: 10000  # Limit for faster training
+  max_val_samples: 1000
+
+training:
+  num_epochs: 20
+  learning_rate: 3e-4
+  weight_decay: 0.01
+  grad_clip: 1.0
+  
+  # Optimizations
+  use_amp: true
+  gradient_accumulation_steps: 4  # Effective batch = 16
+  use_fused_optimizer: true
+  compile_model: true
+
+logging:
+  use_wandb: false
+  project_name: 'hydra-narrativeqa'
+  run_name: 'narrativeqa-routed-v1'
+  output_dir: 'outputs/narrativeqa'
+  log_interval: 50
+  monitor_interval: 200
+  save_every: 5

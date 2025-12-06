@@ -7,7 +7,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.model.routed_model import RoutedHybridModel, RoutedHybridLayer
-from src.model.blocks.router import EfficientTokenRouter, RouterLoss, RouterMonitor
+from model.router import EfficientTokenRouter, RouterLoss, RouterMonitor
 from src.model.hybrid_model import HybridSSMTransformer  # Baseline for comparison
 
 
