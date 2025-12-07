@@ -91,7 +91,7 @@ def load_config_from_yaml(yaml_path):
         
         # Training defaults
         'num_epochs': 10,
-        'learning_rate': 3e-4,
+        'learning_rate': 0.007,
         'weight_decay': 0.01,
         'grad_clip': 1.0,
         'use_amp': True,

@@ -53,7 +53,7 @@ def simple_train():
         'n_layers': 2,
         'n_heads': 4,
         'vocab_size': 50257,
-        'learning_rate': 3e-4,
+        'learning_rate': 0.007,
     }
     
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
