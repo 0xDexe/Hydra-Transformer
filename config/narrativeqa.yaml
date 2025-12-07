@@ -1,6 +1,5 @@
-# NarrativeQA Configuration
-# Long-form reading comprehension dataset
-# Better for evaluating long-context understanding and routing
+# NarrativeQA - Safe Configuration (No CUDA Errors)
+# This config works reliably based on your testing
 
 model:
   d_model: 768
@@ -18,6 +17,7 @@ router:
   use_gradient_balancing: true
   use_position_invariance: true
   use_checkpoint: false
+  use_query_aware_routing: false  # Disable for now (can enable later)
 
 curriculum:
   warmup_steps: 2000
@@ -31,36 +31,34 @@ router_loss:
   position_invariance: 0.005
   layer_diversity: 0.005
 
-# NarrativeQA-specific data config
 data:
   dataset_name: 'narrativeqa'
   tokenizer_name: 'gpt2'
-  max_length: 2048  # Longer sequences for full stories
-  batch_size: 4     # Smaller batch due to longer sequences
+  max_length: 2048
+  batch_size: 4           # Reasonable batch size
   num_workers: 4
   
-  # Dataset-specific options
-  use_summary: true  # Use summaries (faster) vs full documents
-  max_train_samples: 10000  # Limit for faster training
-  max_val_samples: 1000
+  use_summary: true
+  max_train_samples: null  # Use full dataset
+  max_val_samples: null
 
 training:
-  num_epochs: 10
+  num_epochs: 15
   learning_rate: 0.007
   weight_decay: 0.01
   grad_clip: 1.0
   
-  # Optimizations
-  use_amp: true
-  gradient_accumulation_steps: 4  # Effective batch = 16
-  use_fused_optimizer: true
-  compile_model: false
+  # Safe optimizations (tested and working)
+  use_amp: true                    
+  gradient_accumulation_steps: 4   
+  use_fused_optimizer: true        
+  compile_model: false             
 
 logging:
-  use_wandb: false
+  use_wandb: true
   project_name: 'hydra-narrativeqa'
-  run_name: 'narrativeqa-routed-v1'
-  output_dir: '/projectnb/cs523aw/students/waqar/outputs/narrativeqa'
+  run_name: 'narrativeqa-safe-v1'
+  output_dir: 'outputs/narrativeqa'
   log_interval: 50
   monitor_interval: 200
-  save_every: 5
+  save_every: 1

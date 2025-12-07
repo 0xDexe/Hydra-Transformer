@@ -35,7 +35,7 @@ data:
   tokenizer_name: 'gpt2'
   max_length: 128
   batch_size: 2
-  num_workers: 0
+  num_workers: 
   max_train_samples: 50
   max_val_samples: 10
 
