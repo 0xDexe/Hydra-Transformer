@@ -53,13 +53,13 @@ training:
   use_amp: true
   gradient_accumulation_steps: 2
   use_fused_optimizer: true
-  compile_model: true
+  compile_model: false
 
 logging:
   use_wandb: true
   project_name: 'hydra-squad'
   run_name: 'squad-routed-v1'
-  output_dir: 'outputs/squad'
+  output_dir: '/projectnb/cs523aw/students/waqar/outputs/squad'
   log_interval: 50
   monitor_interval: 200
   save_every: 3

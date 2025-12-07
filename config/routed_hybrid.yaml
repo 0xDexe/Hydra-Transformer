@@ -57,7 +57,7 @@ logging:
   use_wandb: true
   project_name: 'hydra-routed'
   run_name: 'routed-hybrid-v1'
-  output_dir: 'outputs/routed-v1'
+  output_dir: '/projectnb/cs523aw/students/waqar/outputs/routed-v1'
   log_interval: 10  # Log every N batches
   monitor_interval: 100  # Detailed routing stats every N batches
   save_every: 5  # Save checkpoint every N epochs

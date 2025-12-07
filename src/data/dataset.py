@@ -2,6 +2,12 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from datasets import load_dataset
 from transformers import AutoTokenizer
+import os
+
+os.environ["HF_DATASETS_CACHE"] = "/projectnb/cs523aw/students/waqar/hf_cache"
+os.environ["HF_HOME"] = "/projectnb/cs523aw/students/waqar/hf_home"
+os.environ["TRANSFORMERS_CACHE"] = "/projectnb/cs523aw/students/waqar/transformers_cache"
+os.environ["TMPDIR"] = "/projectnb/cs523aw/students/waqar/tmp"
 
 class TextDataset(Dataset):
     """

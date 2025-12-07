@@ -54,13 +54,13 @@ training:
   use_amp: true
   gradient_accumulation_steps: 2  # Effective batch = 32
   use_fused_optimizer: true
-  compile_model: true
+  compile_model: false
 
 logging:
   use_wandb: true
   project_name: 'hydra-nq'
   run_name: 'nq-closedbook-routed-v1'
-  output_dir: 'outputs/natural_questions'
+  output_dir: '/projectnb/cs523aw/students/waqar/outputs/natural_questions'
   log_interval: 50
   monitor_interval: 200
   save_every: 5

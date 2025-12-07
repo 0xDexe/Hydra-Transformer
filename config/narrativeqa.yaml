@@ -45,8 +45,8 @@ data:
   max_val_samples: 1000
 
 training:
-  num_epochs: 20
-  learning_rate: 3e-4
+  num_epochs: 10
+  learning_rate: 0.0001
   weight_decay: 0.01
   grad_clip: 1.0
   
@@ -54,13 +54,13 @@ training:
   use_amp: true
   gradient_accumulation_steps: 4  # Effective batch = 16
   use_fused_optimizer: true
-  compile_model: true
+  compile_model: false
 
 logging:
   use_wandb: false
   project_name: 'hydra-narrativeqa'
   run_name: 'narrativeqa-routed-v1'
-  output_dir: 'outputs/narrativeqa'
+  output_dir: '/projectnb/cs523aw/students/waqar/outputs/narrativeqa'
   log_interval: 50
   monitor_interval: 200
   save_every: 5
