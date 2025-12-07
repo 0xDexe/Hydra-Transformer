@@ -22,8 +22,10 @@ import yaml
 import argparse
 import sys
 import time
+import json
 from pathlib import Path
 from typing import Dict
+from datetime import datetime
 import torch
 import torch.nn as nn
 from torch.optim import AdamW
@@ -33,8 +35,8 @@ from tqdm import tqdm
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.model.routed_model import RoutedHybridModel
-from src.model.router import RouterLoss, RouterMonitor, RouterCurriculum
+from src.model.routed_hybrid_model import RoutedHybridModel
+from src.model.token_router import RouterLoss, RouterMonitor, RouterCurriculum
 from src.data.qa_datasets import get_qa_dataloaders
 
 
@@ -63,6 +65,7 @@ def load_config_from_yaml(yaml_path):
         'use_gradient_balancing': True,
         'use_position_invariance': True,
         'use_checkpoint': False,
+        'use_query_aware_routing': False,  # NEW: Query-aware routing
         
         # Curriculum defaults
         'router_warmup_steps': 2000,
@@ -213,7 +216,8 @@ class OptimizedQATrainer:
             use_gradient_balancing=config['use_gradient_balancing'],
             use_position_invariance=config['use_position_invariance'],
             use_checkpoint=config['use_checkpoint'],
-            tie_weights=config['tie_weights']
+            tie_weights=config['tie_weights'],
+            use_query_aware_routing=config['use_query_aware_routing']  # NEW
         ).to(self.device)
         
         total_params = self.model.get_num_params() / 1e6
@@ -290,6 +294,16 @@ class OptimizedQATrainer:
         # State
         self.global_step = 0
         self.current_epoch = 0
+        
+        # Training log (JSON per epoch)
+        self.training_log = []
+        self.training_log_path = self.output_dir / 'training_log.json'
+        
+        # Load existing log if resuming
+        if self.training_log_path.exists():
+            with open(self.training_log_path, 'r') as f:
+                self.training_log = json.load(f)
+            print(f"✓ Loaded existing training log with {len(self.training_log)} epochs")
         
         # Wandb
         if config['use_wandb']:
@@ -423,7 +437,13 @@ class OptimizedQATrainer:
         epoch_time = time.time() - epoch_start
         
         print(f"\n✓ Epoch {epoch}: {epoch_time:.1f}s, loss={avg_loss:.4f}")
-        return avg_loss
+        
+        return {
+            'avg_loss': avg_loss,
+            'epoch_time': epoch_time,
+            'num_batches': num_batches,
+            'global_step': self.global_step
+        }
     
     @torch.no_grad()
     def validate(self):
@@ -475,6 +495,15 @@ class OptimizedQATrainer:
             torch.save(checkpoint, epoch_path)
             print(f"✓ Saved epoch {epoch} checkpoint")
     
+    def save_training_log(self, epoch_metrics):
+        """Save training log as JSON"""
+        self.training_log.append(epoch_metrics)
+        
+        with open(self.training_log_path, 'w') as f:
+            json.dump(self.training_log, f, indent=2)
+        
+        print(f"✓ Saved training log ({len(self.training_log)} epochs)")
+    
     def train(self):
         """Main training loop"""
         print(f"\n{'='*60}")
@@ -486,11 +515,37 @@ class OptimizedQATrainer:
         print(f"{'='*60}\n")
         
         for epoch in range(self.current_epoch, self.config['num_epochs']):
-            train_loss = self.train_epoch(epoch)
+            # Train
+            train_metrics = self.train_epoch(epoch)
+            
+            # Validate
             val_loss, ppl = self.validate()
             
             print(f"Validation: loss={val_loss:.4f}, ppl={ppl:.2f}")
             
+            # Prepare epoch log
+            epoch_log = {
+                'epoch': epoch,
+                'timestamp': datetime.now().isoformat(),
+                'train': {
+                    'loss': train_metrics['avg_loss'],
+                    'time_seconds': train_metrics['epoch_time'],
+                    'num_batches': train_metrics['num_batches'],
+                    'samples_per_sec': train_metrics['num_batches'] * self.config['batch_size'] / train_metrics['epoch_time'],
+                },
+                'val': {
+                    'loss': val_loss,
+                    'perplexity': ppl
+                },
+                'global_step': train_metrics['global_step'],
+                'learning_rate': self.scheduler.get_last_lr()[0],
+                'is_best': val_loss < self.best_val_loss
+            }
+            
+            # Save training log
+            self.save_training_log(epoch_log)
+            
+            # Wandb logging
             if self.use_wandb:
                 import wandb
                 wandb.log({
@@ -499,6 +554,7 @@ class OptimizedQATrainer:
                     'epoch': epoch
                 })
             
+            # Checkpointing
             is_best = val_loss < self.best_val_loss
             if is_best:
                 self.best_val_loss = val_loss
@@ -509,6 +565,7 @@ class OptimizedQATrainer:
         print(f"\n{'='*60}")
         print(f"✓ TRAINING COMPLETE!")
         print(f"Best val loss: {self.best_val_loss:.4f}")
+        print(f"Training log saved to: {self.training_log_path}")
         print(f"{'='*60}\n")
 
 

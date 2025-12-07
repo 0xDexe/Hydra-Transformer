@@ -8,12 +8,19 @@ Disables:
 - Gradient accumulation
 - Router curriculum
 - Complex monitoring
+
+Includes:
+- Basic checkpointing
+- JSON training log
 """
 
 import yaml
 import argparse
 import sys
+import json
+import time
 from pathlib import Path
+from datetime import datetime
 import torch
 import torch.nn as nn
 from torch.optim import Adam
@@ -21,7 +28,7 @@ from tqdm import tqdm
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.model.routed_model import RoutedHybridModel
+from src.model.routed_hybrid_model import RoutedHybridModel
 from src.data.qa_datasets import get_qa_dataloaders
 
 
@@ -46,7 +53,7 @@ def simple_train():
         'n_layers': 2,
         'n_heads': 4,
         'vocab_size': 50257,
-        'learning_rate': 0.001,
+        'learning_rate': 3e-4,
     }
     
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
