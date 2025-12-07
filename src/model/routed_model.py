@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.utils.checkpoint import checkpoint
 from typing import Dict, Optional, Tuple, List, Any
 import math
 
@@ -10,7 +11,7 @@ try:
 except ImportError:
     HAS_FLASH_ATTN = False
 
-from src.model.router import EfficientTokenRouter, GradientScaler
+from .router import EfficientTokenRouter, GradientScaler
 
 
 class SSMBlock(nn.Module):
@@ -208,7 +209,8 @@ class RoutedHybridLayer(nn.Module):
         total_layers: int = 12,
         use_gradient_balancing: bool = True,
         use_position_invariance: bool = True,
-        use_checkpoint: bool = False  # Activation checkpointing
+        use_checkpoint: bool = False,  # Activation checkpointing
+        use_query_aware_routing: bool = False  # NEW: Query-aware routing
     ):
         super().__init__()
         self.d_model = d_model
@@ -217,6 +219,7 @@ class RoutedHybridLayer(nn.Module):
         self.layer_idx = layer_idx
         self.use_gradient_balancing = use_gradient_balancing
         self.use_checkpoint = use_checkpoint
+        self.use_query_aware_routing = use_query_aware_routing
         
         # Core blocks
         self.ssm_block = SSMBlock(
@@ -238,17 +241,29 @@ class RoutedHybridLayer(nn.Module):
             dropout=dropout
         )
         
-        # Token router
-        self.router = EfficientTokenRouter(
-            d_model=d_model,
-            hidden_dim=router_hidden_dim,
-            target_ratio=target_ratio,
-            use_position_invariance=use_position_invariance,
-            use_threshold=True,  # Faster than top-k
-            layer_idx=layer_idx,
-            total_layers=total_layers,
-            dropout=dropout
-        )
+        # Token router - choose between regular and query-aware
+        if use_query_aware_routing:
+            from src.model.query_aware_router import QueryAwareRouter
+            self.router = QueryAwareRouter(
+                d_model=d_model,
+                hidden_dim=router_hidden_dim,
+                target_ratio=target_ratio,
+                use_content_routing=True,
+                n_heads=4,  # Fewer heads for efficiency
+                layer_idx=layer_idx,
+                total_layers=total_layers,
+            )
+        else:
+            self.router = EfficientTokenRouter(
+                d_model=d_model,
+                hidden_dim=router_hidden_dim,
+                target_ratio=target_ratio,
+                use_position_invariance=use_position_invariance,
+                use_threshold=True,  # Faster than top-k
+                layer_idx=layer_idx,
+                total_layers=total_layers,
+                dropout=dropout
+            )
         
         # For efficient token gathering
         self.register_buffer('_dummy', torch.tensor(0.0))  # For device detection
@@ -316,7 +331,9 @@ class RoutedHybridLayer(nn.Module):
     def forward_with_routing(
         self,
         x: torch.Tensor,
-        deterministic: bool = False
+        deterministic: bool = False,
+        question_embedding: Optional[torch.Tensor] = None,
+        question_mask: Optional[torch.Tensor] = None
     ) -> Tuple[torch.Tensor, Dict[str, Any]]:
         """
         Forward pass with learned routing
@@ -324,6 +341,8 @@ class RoutedHybridLayer(nn.Module):
         Args:
             x: (batch, seqlen, d_model)
             deterministic: if True, use deterministic routing
+            question_embedding: (batch, d_model) optional question representation for query-aware routing
+            question_mask: (batch, seqlen) optional boolean mask for question tokens
         
         Returns:
             output: (batch, seqlen, d_model)
@@ -332,7 +351,18 @@ class RoutedHybridLayer(nn.Module):
         batch, seqlen, d_model = x.shape
         
         # Get routing decisions
-        routing_mask, router_aux = self.router(x, deterministic=deterministic)
+        if self.use_query_aware_routing:
+            # Query-aware routing
+            from src.model.query_aware_router import QueryAwareRouter
+            routing_mask, router_aux = self.router(
+                x,
+                question_embedding=question_embedding,
+                question_mask=question_mask,
+                deterministic=deterministic
+            )
+        else:
+            # Standard content-based routing
+            routing_mask, router_aux = self.router(x, deterministic=deterministic)
         
         # All tokens through SSM (baseline processing)
         ssm_output = self.ssm_block(x)
@@ -434,13 +464,15 @@ class RoutedHybridModel(nn.Module):
         use_gradient_balancing: bool = True,
         use_position_invariance: bool = True,
         use_checkpoint: bool = False,
-        tie_weights: bool = True
+        tie_weights: bool = True,
+        use_query_aware_routing: bool = False  # NEW: Enable query-aware routing
     ):
         super().__init__()
         self.vocab_size = vocab_size
         self.d_model = d_model
         self.n_layers = n_layers
         self.target_ratio = target_ratio
+        self.use_query_aware_routing = use_query_aware_routing
         
         # Token embeddings
         self.token_embedding = nn.Embedding(vocab_size, d_model)
@@ -468,7 +500,8 @@ class RoutedHybridModel(nn.Module):
                 total_layers=n_layers,
                 use_gradient_balancing=use_gradient_balancing,
                 use_position_invariance=use_position_invariance,
-                use_checkpoint=use_checkpoint
+                use_checkpoint=use_checkpoint,
+                use_query_aware_routing=use_query_aware_routing  # Pass to layers
             )
             for i in range(n_layers)
         ])
@@ -503,7 +536,8 @@ class RoutedHybridModel(nn.Module):
         input_ids: torch.Tensor,
         labels: Optional[torch.Tensor] = None,
         deterministic: bool = False,
-        return_router_outputs: bool = False
+        return_router_outputs: bool = False,
+        question_mask: Optional[torch.Tensor] = None  # NEW: Optional question mask
     ) -> Tuple[Optional[torch.Tensor], torch.Tensor, Optional[List[Dict[str, Any]]]]:
         """
         Forward pass
@@ -513,6 +547,7 @@ class RoutedHybridModel(nn.Module):
             labels: (batch, seqlen) optional, for loss computation
             deterministic: if True, use deterministic routing
             return_router_outputs: if True, return routing info
+            question_mask: (batch, seqlen) optional, boolean mask for question tokens (for query-aware routing)
         
         Returns:
             loss: scalar or None
@@ -530,10 +565,28 @@ class RoutedHybridModel(nn.Module):
         
         x = self.dropout(x)
         
+        # Extract question embedding if using query-aware routing
+        question_embedding = None
+        if self.use_query_aware_routing:
+            # Extract question representation from embeddings
+            if question_mask is not None:
+                # Use provided mask to extract question
+                question_tokens = x * question_mask.unsqueeze(-1)
+                question_embedding = question_tokens.sum(dim=1) / (question_mask.sum(dim=1, keepdim=True) + 1e-8)
+            else:
+                # Use attention pooling over all tokens (model learns what's important)
+                query = x.mean(dim=1, keepdim=True)  # (batch, 1, d_model)
+                scores = torch.bmm(query, x.transpose(1, 2))  # (batch, 1, seqlen)
+                weights = F.softmax(scores, dim=-1)
+                question_embedding = torch.bmm(weights, x).squeeze(1)  # (batch, d_model)
+        
         # Process through layers
         router_outputs = []
         for layer in self.layers:
-            x, aux = layer(x, deterministic=deterministic)
+            if self.use_query_aware_routing:
+                x, aux = layer(x, deterministic=deterministic, question_embedding=question_embedding, question_mask=question_mask)
+            else:
+                x, aux = layer(x, deterministic=deterministic)
             if return_router_outputs:
                 router_outputs.append(aux)
         

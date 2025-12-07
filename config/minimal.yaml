@@ -1,0 +1,61 @@
+# Minimal Configuration - For Debugging CUDA Errors
+# Everything disabled except basic training
+
+model:
+  d_model: 256
+  n_layers: 2
+  n_heads: 4
+  d_state: 16
+  d_conv: 4
+  expand: 2
+  dropout: 0.0
+  tie_weights: true
+
+router:
+  hidden_dim: 32
+  target_ratio: 0.15
+  use_gradient_balancing: false  # Disable
+  use_position_invariance: false  # Disable
+  use_checkpoint: false
+  use_query_aware_routing: false
+
+curriculum:
+  warmup_steps: 0  # Disable curriculum
+
+router_loss:
+  total_weight: 0.0  # DISABLE ROUTER LOSS ENTIRELY
+  load_balance: 0.0
+  entropy: 0.0
+  variance: 0.0
+  position_invariance: 0.0
+  layer_diversity: 0.0
+
+data:
+  dataset_name: 'narrativeqa'
+  tokenizer_name: 'gpt2'
+  max_length: 128
+  batch_size: 2
+  num_workers: 0
+  max_train_samples: 50
+  max_val_samples: 10
+
+training:
+  num_epochs: 1
+  learning_rate: 3e-4
+  weight_decay: 0.01
+  grad_clip: 1.0
+  
+  # ALL OPTIMIZATIONS DISABLED
+  use_amp: false
+  gradient_accumulation_steps: 1
+  use_fused_optimizer: false
+  compile_model: false
+
+logging:
+  use_wandb: false
+  project_name: 'hydra-debug'
+  run_name: 'minimal'
+  output_dir: 'outputs/minimal'
+  log_interval: 5
+  monitor_interval: 10
+  save_every: 1
