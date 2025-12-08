@@ -20,9 +20,8 @@ router:
   use_query_aware_routing: false  # Disable for now (can enable later)
 
 curriculum:
-  warmup_steps: 2000
-  heuristic_type: 'uniform'
-
+  warmup_steps: 0  # Disable curriculum
+  
 router_loss:
   total_weight: 0.01
   load_balance: 0.01
@@ -58,7 +57,7 @@ logging:
   use_wandb: true
   project_name: 'hydra-narrativeqa'
   run_name: 'narrativeqa-safe-v1'
-  output_dir: 'outputs/narrativeqa'
+  output_dir: '/projectnb/cs523aw/students/outputs/narrativeqa'
   log_interval: 50
   monitor_interval: 200
   save_every: 1

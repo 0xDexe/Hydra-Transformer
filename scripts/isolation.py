@@ -168,7 +168,7 @@ def create_test_config(test_name, test_config):
     }
     
     # Save config
-    config_path = Path(f'configs/progressive_test_{test_name}.yaml')
+    config_path = Path(f'config/progressive_test_{test_name}.yaml')
     with open(config_path, 'w') as f:
         yaml.dump(base_config, f, default_flow_style=False)
     
@@ -304,7 +304,7 @@ def main():
     if last_pass:
         print(f"\n Safe config: Use features from '{last_pass}' test")
         print(f"\nTo use this for NarrativeQA:")
-        print(f"1. Copy configs/progressive_test_{last_pass}.yaml")
+        print(f"1. Copy config/progressive_test_{last_pass}.yaml")
         print(f"2. Update:")
         print(f"   - dataset_name: 'narrativeqa'")
         print(f"   - max_length: 2048")

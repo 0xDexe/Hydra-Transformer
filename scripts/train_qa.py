@@ -35,8 +35,8 @@ from tqdm import tqdm
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.model.routed_hybrid_model import RoutedHybridModel
-from src.model.token_router import RouterLoss, RouterMonitor, RouterCurriculum
+from src.model.routed_model import RoutedHybridModel
+from src.model.router import RouterLoss, RouterMonitor, RouterCurriculum
 from src.data.qa_datasets import get_qa_dataloaders
 
 
