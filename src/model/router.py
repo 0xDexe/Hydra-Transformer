@@ -347,7 +347,8 @@ class RouterLoss:
         Encourage variance in routing probabilities
         Prevents all probabilities being identical
         """
-        return -router_probs.var()
+        variance= router_probs.var()
+        return -(variance + 1e-8)
     
     def position_invariance_loss(
         self,
@@ -403,10 +404,17 @@ class RouterLoss:
         total_corr = 0.0
         num_pairs = 0
         
+        # Add noise to prevent identical patterns
+        flat = flat + torch.randn_like(flat) * 1e-6
+
         for i in range(n_layers):
             for j in range(i + 1, n_layers):
-                # Cosine similarity between routing patterns
-                corr = F.cosine_similarity(flat[i], flat[j], dim=0)
+                # Manual cosine similarity with epsilon
+                dot_product = (flat[i] * flat[j]).sum()
+                norm_i = flat[i].norm() + 1e-8  # Prevent division by zero
+                norm_j = flat[j].norm() + 1e-8  # Prevent division by zero
+                
+                corr = dot_product / (norm_i * norm_j)
                 total_corr += corr.abs()
                 num_pairs += 1
         
