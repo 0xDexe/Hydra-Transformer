@@ -120,39 +120,39 @@ class EfficientTokenRouter(nn.Module):
         return pos_bias * self.position_bias_scale
     
     def get_routing_mask(
-        self,
-        scores: torch.Tensor,
-        deterministic: bool = False
-    ) -> Tuple[torch.Tensor, Dict[str, float]]:
-        """
-        Convert scores to binary routing decisions
-        Args:
-            scores: (batch, seqlen) raw routing scores
-            deterministic: if True, use threshold; if False, sample (for exploration)
-        Returns:
-            mask: (batch, seqlen) boolean mask
-            stats: dictionary of routing statistics
-        """
+    self,
+    scores: torch.Tensor,
+    deterministic: bool = False
+) -> Tuple[torch.Tensor, Dict[str, float]]:
+        """Convert scores to binary routing decisions"""
         batch, seqlen = scores.shape
         
-        # Apply sigmoid to get probabilities
-        probs = torch.sigmoid(scores)
+        # Add threshold to scores
+        logits = scores + self.threshold
+        
+        # Apply sigmoid
+        probs = torch.sigmoid(logits)
+        
+        # CRITICAL: Clamp to [0, 1]
+        probs = torch.clamp(probs, min=0.0, max=1.0)
+        
+        # SAFETY: Handle NaN/Inf
+        if torch.isnan(probs).any() or torch.isinf(probs).any():
+            probs = torch.nan_to_num(probs, nan=0.5, posinf=1.0, neginf=0.0)
         
         if self.use_threshold:
-            # Threshold-based routing (faster, deterministic)
             if deterministic or not self.training:
-                mask = probs > torch.sigmoid(self.threshold)
+                mask = probs > 0.5  # Correct decision boundary
             else:
-                # Stochastic routing during training for exploration
-                mask = torch.bernoulli(probs).bool()
+                mask = torch.bernoulli(probs).bool()  # Now safe!
         else:
-            # Top-k routing (ensures exact ratio)
+            # Top-k routing
             k = max(1, int(seqlen * self.target_ratio))
             top_k_values, top_k_indices = torch.topk(probs, k, dim=1)
             mask = torch.zeros_like(probs, dtype=torch.bool)
             mask.scatter_(1, top_k_indices, True)
         
-        # Compute statistics
+        # Compute statistics  
         actual_ratio = mask.float().mean().item()
         stats = {
             'routing_ratio': actual_ratio,
@@ -163,7 +163,7 @@ class EfficientTokenRouter(nn.Module):
         }
         
         return mask, stats
-    
+        
     def forward(
         self,
         x: torch.Tensor,
@@ -193,7 +193,8 @@ class EfficientTokenRouter(nn.Module):
         mask, stats = self.get_routing_mask(total_scores, deterministic)
         
         # Compute probabilities for loss
-        probs = torch.sigmoid(total_scores)
+        probs = torch.sigmoid(total_scores + self.threshold)
+
         
         # Prepare auxiliary outputs
         aux = {
