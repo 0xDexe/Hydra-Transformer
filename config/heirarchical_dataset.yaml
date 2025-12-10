@@ -1,0 +1,12 @@
+# ============================================================
+# Dataset for Hierarchical Hybrid Transformer
+# ============================================================
+
+dataset_name: "wikitext"
+dataset_config: "wikitext-2-raw-v1"
+
+tokenizer_name: "gpt2"
+max_length: 512
+
+batch_size: 8
+num_workers: 4

@@ -1,0 +1,13 @@
+# ============================================================
+# Training Hyperparameters (Hierarchical Model v3)
+# ============================================================
+
+num_epochs: 10
+
+learning_rate: 0.0003
+weight_decay: 0.01
+grad_clip: 1.0
+
+use_mixed_precision: true
+
+log_interval: 10

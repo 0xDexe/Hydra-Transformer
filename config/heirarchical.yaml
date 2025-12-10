@@ -1,0 +1,16 @@
+# ============================================================
+# Hierarchical Hybrid Transformer (v3)
+# ============================================================
+
+model_type: "v3"
+
+defaults:
+  - model: hierarchical_model
+  - data: hierarchical_dataset
+  - training: hierarchical_train
+
+# Output / Logging
+run_name: "hierarchical-v3"
+output_dir: "outputs/hierarchical-v3"
+project_name: "hydra-hierarchical"
+use_wandb: true
