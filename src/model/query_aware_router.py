@@ -10,7 +10,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import Dict, Optional, Tuple
 
-from src.model.token_router import EfficientTokenRouter
+from src.model.router import EfficientTokenRouter
 
 
 class QueryAwareRouter(nn.Module):

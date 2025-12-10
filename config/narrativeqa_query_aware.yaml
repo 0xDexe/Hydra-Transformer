@@ -1,5 +1,5 @@
-# NarrativeQA with Query-Aware Routing Configuration
-# This config enables query-aware routing for improved QA performance
+# Complete Query-Aware HYDRA Configuration
+# Works with train_query_aware_complete.py
 
 model:
   d_model: 768
@@ -8,6 +8,7 @@ model:
   d_state: 16
   d_conv: 4
   expand: 2
+  d_ff: 3072
   dropout: 0.1
   tie_weights: true
 
@@ -16,12 +17,6 @@ router:
   target_ratio: 0.15
   use_gradient_balancing: true
   use_position_invariance: true
-  use_checkpoint: false
-  use_query_aware_routing: true  # NEW: Enable query-aware routing
-
-curriculum:
-  warmup_steps: 2000
-  heuristic_type: 'uniform'
 
 router_loss:
   total_weight: 0.01
@@ -31,36 +26,33 @@ router_loss:
   position_invariance: 0.005
   layer_diversity: 0.005
 
-# NarrativeQA-specific data config
+curriculum:
+  router_warmup_steps: 2000
+  curriculum_heuristic: 'uniform'
+
 data:
-  dataset_name: 'narrativeqa'
+  dataset_name: 'naturalqa'
   tokenizer_name: 'gpt2'
   max_length: 2048
   batch_size: 4
   num_workers: 4
-  
-  # Dataset-specific options
-  use_summary: true
-  max_train_samples: 10000
-  max_val_samples: 1000
+  max_train_samples: null
+  max_val_samples: null
 
 training:
-  num_epochs: 20
+  num_epochs: 10
   learning_rate: 0.007
   weight_decay: 0.01
   grad_clip: 1.0
-  
-  # Optimizations
   use_amp: true
   gradient_accumulation_steps: 4
   use_fused_optimizer: true
-  compile_model: true
 
 logging:
   use_wandb: true
   project_name: 'hydra-query-aware'
-  run_name: 'narrativeqa-query-aware-v1'
-  output_dir: 'outputs/narrativeqa_query_aware'
+  run_name: 'query-aware-naturalqa-v1'
+  output_dir: 'outputs/query_aware_naturalqa'
   log_interval: 50
   monitor_interval: 200
   save_every: 5
